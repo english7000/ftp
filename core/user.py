@@ -17,18 +17,25 @@ class user(object):
         self.quote = quote            #配额
 
     def login(self,name,passwd):
-        count =0
-        while count < 3:
-            if name == self.name and passwd ==self.passwd:
-                print('welcome back')
-                self.conn.send(self.homedir.encode('utf-8'))            #认证成功后线把homedir传给server
-                print(self.conn.recv(1024).decode())                    #server会切换目录并且把目录空间使用情况send回来
-                return 1                #登录成功
-            elif count !=3:
-                print('username or passwd wrong ')
+        self.conn.send(bytes(name,encoding='utf-8'))
+
+        name_check = self.conn.recv(1024)
+        if name_check == b'ok':
+            self.conn.send(bytes(passwd,encoding='utf-8'))
+            passwd_check = self.conn.recv(1024)
+            if passwd_check ==b'ok':
+                print('welcone back! %s' %name)
+                print(self.conn.recv(1024).decode())
+                return 1                            #认证成功
             else:
-                print('too many login failure')
-                return 0                #登录失败
+                print('Wrong passwd!')
+                return 0
+
+        else:
+            print('no username :' ,name)
+            return 0                                #认证失败
+
+
 
     def connect(self,ip,port):
         client =socket.socket()
@@ -40,7 +47,7 @@ class user(object):
             self.conn.send(command.encode('utf-8'))             #ls和cd命令发送给server执行并收取结果
             length = self.conn.recv(1024).decode()                #接受命令结果长度
             self.conn.send(b'ready')
-            # print(length)
+            print(length)
             if length:
                 body = ''
                 while len(body) < int(length):                           #循环接受结果
@@ -99,11 +106,20 @@ class user(object):
 if __name__ == '__main__':
     karl = user('karl','123','/Users/karl_/Documents/GitHub/ftp/cfg',0)
     karl.connect('localhost',6965)
-    karl.login('karl','123')
 
-    while True:
-        command = input('>>:')
-        karl.exec_command(command)
+    count = 3
+    while count >0:
+        name = input('name:')
+        passwd = input('passwd:')
+        if count == 0:
+            exit()
+        if karl.login(name,passwd):
+            while True:
+                command = input('>>:')
+                karl.exec_command(command)
+        else:
+            count -= 1
+            continue
 
 
 

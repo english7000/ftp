@@ -3,6 +3,11 @@
 
 
 import os
-command = 'get aaa'
-file_name = command.replace('get ','').split('/').pop()
-print(file_name)
+
+import socket
+
+server = socket.socket()
+server.bind(('localhost',6969))
+server.listen()
+conn,addr =server.accept()
+conn.close()
