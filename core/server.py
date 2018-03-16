@@ -14,13 +14,12 @@ class Myserver(socketserver.BaseRequestHandler):
         '''先接收username和passwd对用户进行验证'''
         count= 3
         while count >=0:
-            print(count)
             if count == 0:
                 conn.close()
                 exit()
             user_name = conn.recv(1024).strip().decode()
             user_info = self.init(user_name)
-            print(user_info)
+            # print(user_info)
             if user_info:
                 conn.send(b'ok')
                 user_passwd = conn.recv(1024).strip().decode()
@@ -53,40 +52,42 @@ class Myserver(socketserver.BaseRequestHandler):
                     conn.send(data.encode('utf-8'))
 
             elif command.strip().startswith('cd'):
-                print(111)
-                os.chdir(command.strip().replace('cd ',''))
-                conn.send(b'0')
+                path = command.strip().replace('cd ','')
+                dir_check =os.popen('cd %s && pwd' % path).read()
+                if dir_check.startswith(user_info['homedir']):
+                    os.chdir(path)
+                    conn.send(b'0')
+                else:
+                    conn.send(b'0')
+                    continue
 
             elif command.strip().startswith('put'):                 #上传
                 file_name = command.replace('put ', '').split('/').pop()
                 print(file_name)
                 conn.send(b'ok')
-                length = conn.recv(1024).decode()
-                print(length)
+                file_len = conn.recv(1024).decode()
+                print(file_len)
                 conn.send(b'ready')
-                body = ''
-                while len(body) < int(length):
-                    data = conn.recv(1024).decode()
-                    if not data:
-                        break
-                    body += data
-                    print(body,1)
-                with open(file_name, 'w') as f:
-                    print(body)
-                    f.write(body)
+                length =int(file_len)
+                with open(file_name, 'wb+') as f:
+                    while length >0:
+                        data = conn.recv(1024)
+                        length -= len(data)
+                        print(length)
+                        if not data:
+                            break
+                        f.write(data)
 
             elif command.strip().startswith('get'):                 #下载
                 file_name = command.replace('get ', '').split('/').pop()
                 print(file_name)
-                with open(file_name,'r') as f:
-                    body = ''
-                    for line in f :
-                        body += line
-                length = len(body)
-                print(length)
+                length = int(os.popen("ls -l %s |awk '{print $5}' " % file_name).read())
                 conn.send(str(length).encode('utf-8'))
                 if conn.recv(1024).decode() == 'ready':
-                    conn.sendall(body.encode('utf-8'))
+                    with open(file_name,'rb') as f:
+                        for line in f :
+                            conn.send(line)
+                    print('send over')
 
 
 
@@ -103,13 +104,14 @@ class Myserver(socketserver.BaseRequestHandler):
     @staticmethod                   #设置初始化的静态方法
     def init(name):                 #读取相应的用户字典user_info
         user_info ={}
+        os.chdir('/Users/karl_/Documents/GitHub/ftp/core')              #多线程登录时由于有chdir命令导致第二次登录会找不到账户文件所以要chdir回来
         try:
             with open('../data/user_info/%s' % name,'rb')as f:
                 user_info = pickle.load(f)
-                print(user_info)
+                # print('-----',user_info)
             return user_info
-        except IOError :                    #验证用户是否存在，不存在则显示NO user
-            print('No user named: %s' % name)
+        except Exception as e :                    #验证用户是否存在，不存在则显示NO user
+            print(e)
             return 0
 
 
@@ -124,7 +126,7 @@ if __name__ == '__main__':
     # with open('../data/user_info/karl','wb') as f:
     #     pickle.dump(karl,f)
 
-    server = socketserver.ThreadingTCPServer(('localhost', 6965), Myserver)  # 直接多线程实例化
+    server = socketserver.ThreadingTCPServer(('localhost', 6967), Myserver)  # 直接多线程实例化
     server.serve_forever()
 
     # karl = Myserver.init('karl')

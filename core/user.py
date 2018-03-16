@@ -4,6 +4,7 @@
 
 import os
 import  socket
+import getpass
 
 class user(object):
     '''用户类'''
@@ -24,7 +25,7 @@ class user(object):
             self.conn.send(bytes(passwd,encoding='utf-8'))
             passwd_check = self.conn.recv(1024)
             if passwd_check ==b'ok':
-                print('welcone back! %s' %name)
+                print('welcome back! %s' %name)
                 print(self.conn.recv(1024).decode())
                 return 1                            #认证成功
             else:
@@ -65,16 +66,14 @@ class user(object):
     def put(self,command):                                       #上传文件
         self.conn.send(command.encode('utf-8'))                   #fa
         self.conn.recv(1024)
-        body = ''
-        with open(command.strip().replace('put ',''),'r') as f:
-            for line in f:
-                body += line
-        self.conn.send(str(len(body)).encode('utf-8'))
+        file_name = command.strip().replace('put ','')
+        length =os.popen("ls -l %s |awk '{print $5}' " %file_name).read()
+        self.conn.send(bytes(length,encoding='utf-8'))
         data = self.conn.recv(1024)
-        print(data)
-        print(body)
         if data.decode() == 'ready':
-            self.conn.send(body.encode('utf-8'))
+            with open(file_name,'rb') as f:
+                for line in f:
+                    self.conn.send(line)
             print('send over')
         else:
             pass
@@ -83,34 +82,39 @@ class user(object):
     def get(self,command):                                 #下载文件
         self.conn.send(command.encode('utf-8'))
         file_len = self.conn.recv(1024).decode()        #待收的文件大小
+        print(file_len)
         self.conn.send(b'ready')
-        length = 0                          #已收的文件大小
-        body = ''
+        length = int(file_len)                         #还剩多少要收的文件大小
+        body = b''
         count =0
-        while length < int(file_len):       #当已收的文件大小<代收的文件大小，循环收取数据
-            count +=1
-            print(count)
-            data = self.conn.recv(1024).decode()
-            body += data
-            length = len(body)
-            print(body)
-            print('len',length)
+        with open(command.strip().replace('get ', ''), 'wb+') as f:  # 写入文件
+            while length >0 :       #当已收的文件大小<代收的文件大小，循环收取数据
+                count +=1
+                print((1-length/int(file_len))*100)
+                data = self.conn.recv(1024)
+                length -= len(data)
+                if data:
+                    f.write(data)
+                else:
+                    exit()
+                # print(body)
+                # print('len',length)
 
-        with open(command.strip().replace('get ',''),'w') as f:         #写入文件
-            f.write(body)
+        # with open(command.strip().replace('get ',''),'wb') as f:         #写入文件
+
 
 
 
 
 
 if __name__ == '__main__':
-    karl = user('karl','123','/Users/karl_/Documents/GitHub/ftp/cfg',0)
-    karl.connect('localhost',6965)
+    karl = user('karl','123','/Users/karl_/Documents/GitHub/ftp/data/home/karl',0)
+    karl.connect('localhost',6967)
 
     count = 3
     while count >0:
         name = input('name:')
-        passwd = input('passwd:')
+        passwd = getpass.getpass('passwd:')
         if count == 0:
             exit()
         if karl.login(name,passwd):
