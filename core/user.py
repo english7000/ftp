@@ -64,30 +64,38 @@ class user(object):
             self.get(command)                                   #path传入put方法
 
     def put(self,command):                                       #上传文件
-        self.conn.send(command.encode('utf-8'))                   #fa
-        self.conn.recv(1024)
-        file_name = command.strip().replace('put ','')
+        self.conn.send(command.encode('utf-8'))
+        self.conn.recv(1024)                                        #ok
+        file_name = command.strip().replace('put ','').split('/').pop()
         length =os.popen("ls -l %s |awk '{print $5}' " %file_name).read()
         self.conn.send(bytes(length,encoding='utf-8'))
-        data = self.conn.recv(1024)
-        if data.decode() == 'ready':
-            with open(file_name,'rb') as f:
-                for line in f:
-                    self.conn.send(line)
-            print('send over')
-        else:
-            pass
+        _seek = self.conn.recv(1024).decode()                       #接受断点续传
+        print(_seek)
+        with open(file_name,'rb') as f:
+            f.seek(int(_seek))
+            for line in f:
+                print(line)
+                self.conn.send(line)
+        print('send over')
+
 
 
     def get(self,command):                                 #下载文件
         self.conn.send(command.encode('utf-8'))
         file_len = self.conn.recv(1024).decode()        #待收的文件大小
         print(file_len)
-        self.conn.send(b'ready')
-        length = int(file_len)                         #还剩多少要收的文件大小
+        file_name = command.strip().replace('get ', '').split('/').pop()
+        if os.path.exists(file_name):
+            _seek = os.stat(file_name).st_size
+            mode = 'ab+'
+        else:
+            _seek =0
+            mode = 'wb'
+        self.conn.send(str(_seek).encode('utf-8'))
+        length = int(file_len) - _seek                       #还剩多少要收的文件大小
         body = b''
         count =0
-        with open(command.strip().replace('get ', ''), 'wb+') as f:  # 写入文件
+        with open(command.strip().replace('get ', ''), mode) as f:  # 写入文件
             while length >0 :       #当已收的文件大小<代收的文件大小，循环收取数据
                 count +=1
                 print((1-length/int(file_len))*100)

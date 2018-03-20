@@ -51,7 +51,7 @@ class Myserver(socketserver.BaseRequestHandler):
                 if conn.recv(1024).decode() == 'ready':
                     conn.send(data.encode('utf-8'))
 
-            elif command.strip().startswith('cd'):
+            elif command.strip().startswith('cd'):                      #假装实现
                 path = command.strip().replace('cd ','')
                 dir_check =os.popen('cd %s && pwd' % path).read()
                 if dir_check.startswith(user_info['homedir']):
@@ -64,12 +64,19 @@ class Myserver(socketserver.BaseRequestHandler):
             elif command.strip().startswith('put'):                 #上传
                 file_name = command.replace('put ', '').split('/').pop()
                 print(file_name)
+                if os.path.exists(file_name):
+                    _seek = os.stat(file_name).st_size
+                    mode = 'ab+'
+                else:
+                    _seek = 0
+                    mode = 'wb'
                 conn.send(b'ok')
                 file_len = conn.recv(1024).decode()
                 print(file_len)
-                conn.send(b'ready')
-                length =int(file_len)
-                with open(file_name, 'wb+') as f:
+                conn.send(bytes(str(_seek),encoding='utf-8'))
+                length =int(file_len)-_seek
+                print(length)
+                with open(file_name, mode) as f:
                     while length >0:
                         data = conn.recv(1024)
                         length -= len(data)
@@ -83,11 +90,12 @@ class Myserver(socketserver.BaseRequestHandler):
                 print(file_name)
                 length = int(os.popen("ls -l %s |awk '{print $5}' " % file_name).read())
                 conn.send(str(length).encode('utf-8'))
-                if conn.recv(1024).decode() == 'ready':
-                    with open(file_name,'rb') as f:
-                        for line in f :
-                            conn.send(line)
-                    print('send over')
+                _seek = conn.recv(1024).decode()
+                with open(file_name,'rb') as f:
+                    f.seek(int(_seek))
+                    for line in f :
+                        conn.send(line)
+                print('send over')
 
 
 
