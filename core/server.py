@@ -6,6 +6,7 @@ import socketserver
 import os
 import pickle
 
+
 class Myserver(socketserver.BaseRequestHandler):
 
     def handle(self):
@@ -36,10 +37,12 @@ class Myserver(socketserver.BaseRequestHandler):
                 count -= 1
                 continue
 
-
+        used = int(os.popen("du -k %s | awk '{print $1}'"% user_info['homedir']).read())*1024
         os.chdir(user_info['homedir'])
         print(os.system('pwd'))
-        conn.send(os.popen('du -sk').read().encode('utf-8'))
+
+        useage = 'quota: %s used %s  available: %s   byte' %(str(user_info['quota']), str(used),str(int(user_info['quota'])- used))
+        conn.send(useage.encode('utf-8'))
         while True:
             command = conn.recv(1024).decode()
             # print(command)
@@ -62,28 +65,35 @@ class Myserver(socketserver.BaseRequestHandler):
                     continue
 
             elif command.strip().startswith('put'):                 #上传
-                file_name = command.replace('put ', '').split('/').pop()
-                print(file_name)
-                if os.path.exists(file_name):
-                    _seek = os.stat(file_name).st_size
-                    mode = 'ab+'
-                else:
-                    _seek = 0
-                    mode = 'wb'
-                conn.send(b'ok')
-                file_len = conn.recv(1024).decode()
-                print(file_len)
-                conn.send(bytes(str(_seek),encoding='utf-8'))
-                length =int(file_len)-_seek
-                print(length)
-                with open(file_name, mode) as f:
-                    while length >0:
-                        data = conn.recv(1024)
-                        length -= len(data)
+                if int(user_info['quota']) > used:
+                    file_name = command.replace('put ', '').split('/').pop()
+                    print(file_name)
+                    if os.path.exists(file_name):
+                        _seek = os.stat(file_name).st_size
+                        mode = 'ab+'
+                    else:
+                        _seek = 0
+                        mode = 'wb'
+                    conn.send(b'ok')
+                    file_len = int(conn.recv(1024).decode())
+                    print(file_len)
+                    if file_len + used <= int(user_info['quota']):
+                        conn.send(bytes(str(_seek),encoding='utf-8'))
+                        length =int(file_len)-_seek
                         print(length)
-                        if not data:
-                            break
-                        f.write(data)
+                        with open(file_name, mode) as f:
+                            while length >0:
+                                data = conn.recv(1024)
+                                length -= len(data)
+                                # print(str((file_len - length/file_len)*100))
+                                # os.system('clear')
+                                if not data:
+                                    break
+                                f.write(data)
+                    else:
+                        conn.send(b'no space left')
+                else:
+                    conn.send(b'no spqce left')
 
             elif command.strip().startswith('get'):                 #下载
                 file_name = command.replace('get ', '').split('/').pop()
@@ -95,7 +105,7 @@ class Myserver(socketserver.BaseRequestHandler):
                     f.seek(int(_seek))
                     for line in f :
                         conn.send(line)
-                print('send over')
+                print('\n\+''send over')
 
 
 
@@ -130,7 +140,7 @@ class Myserver(socketserver.BaseRequestHandler):
 if __name__ == '__main__':
 
 
-    # karl ={'name':'karl','passwd':'123','quota':'500','homedir':'../data/home/karl'}
+    # karl ={'name':'karl','passwd':'123','quota':'100000000','homedir':'../data/home/karl'}
     # with open('../data/user_info/karl','wb') as f:
     #     pickle.dump(karl,f)
 
